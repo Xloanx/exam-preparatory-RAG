@@ -1,0 +1,226 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import {
+  api,
+  clearAccessToken,
+  getAccessToken,
+  setAccessToken,
+  type Category,
+} from "../../lib/api";
+
+export default function AdminPage() {
+  const [token, setToken] = useState<string | null>(null);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [name, setName] = useState("");
+  const [parentId, setParentId] = useState("");
+  const [description, setDescription] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+
+  const loadCategories = async () => {
+    try {
+      const res = await api.categories.list();
+      setCategories(res.categories);
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load categories");
+    }
+  };
+
+  useEffect(() => {
+    const existing = getAccessToken();
+    if (existing) {
+      setToken(existing);
+      void loadCategories();
+    }
+  }, []);
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setBusy(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const res = await api.auth.login({ email, password });
+      setAccessToken(res.access_token);
+      setToken(res.access_token);
+      setEmail("");
+      setPassword("");
+      await loadCategories();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Login failed");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleCreate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!token || !name.trim()) return;
+    setBusy(true);
+    setError(null);
+    setNotice(null);
+    try {
+      await api.categories.create({
+        name: name.trim(),
+        parent_id: parentId ? Number(parentId) : null,
+        description: description.trim() || null,
+      });
+      setNotice("Category created");
+      setName("");
+      setParentId("");
+      setDescription("");
+      await loadCategories();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to create category");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleLogout = () => {
+    clearAccessToken();
+    setToken(null);
+    setCategories([]);
+  };
+
+  if (!token) {
+    return (
+      <main className="min-h-screen bg-slate-950 p-8">
+        <h1 className="text-3xl font-bold text-white">ITF Exam Prep RAG — Admin</h1>
+        <p className="mt-4 text-slate-400">Admin sign in</p>
+        <form onSubmit={handleLogin} className="mt-6 max-w-md rounded-lg border border-slate-700 bg-slate-900 p-4">
+          <div className="space-y-3">
+            <label className="block text-sm text-slate-300">
+              Email
+              <input
+                type="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="mt-1 w-full rounded bg-slate-800 p-2 text-white"
+              />
+            </label>
+            <label className="block text-sm text-slate-300">
+              Password
+              <input
+                type="password"
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="mt-1 w-full rounded bg-slate-800 p-2 text-white"
+              />
+            </label>
+          </div>
+          {error && <p className="mt-3 text-red-400">{error}</p>}
+          <button
+            type="submit"
+            disabled={busy}
+            className="mt-4 rounded bg-slate-700 px-4 py-2 font-semibold text-white disabled:opacity-50"
+          >
+            {busy ? "Signing in..." : "Sign in"}
+          </button>
+        </form>
+        <p className="mt-4">
+          <Link href="/" className="text-slate-400 underline">
+            ← Back to home
+          </Link>
+        </p>
+      </main>
+    );
+  }
+
+  return (
+    <main className="min-h-screen bg-slate-950 p-8">
+      <div className="flex items-center justify-between">
+        <h1 className="text-3xl font-bold text-white">ITF Exam Prep RAG — Admin</h1>
+        <button
+          onClick={handleLogout}
+          className="rounded bg-slate-800 px-4 py-2 text-sm text-slate-200"
+        >
+          Sign out
+        </button>
+      </div>
+
+      {error && <p className="mt-4 text-red-400">{error}</p>}
+      {notice && <p className="mt-4 text-emerald-400">{notice}</p>}
+
+      <section className="mt-8 max-w-2xl rounded-lg border border-slate-700 bg-slate-900 p-4">
+        <h2 className="text-xl font-semibold text-white">Create category</h2>
+        <form onSubmit={handleCreate} className="mt-4 space-y-3">
+          <label className="block text-sm text-slate-300">
+            Name
+            <input
+              type="text"
+              required
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="mt-1 w-full rounded bg-slate-800 p-2 text-white"
+            />
+          </label>
+          <label className="block text-sm text-slate-300">
+            Parent category (optional)
+            <select
+              value={parentId}
+              onChange={(e) => setParentId(e.target.value)}
+              className="mt-1 w-full rounded bg-slate-800 p-2 text-white"
+            >
+              <option value="">— None (top level) —</option>
+              {categories
+                .filter((c) => c.parent_id === null)
+                .map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+            </select>
+          </label>
+          <label className="block text-sm text-slate-300">
+            Description (optional)
+            <input
+              type="text"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              className="mt-1 w-full rounded bg-slate-800 p-2 text-white"
+            />
+          </label>
+          <button
+            type="submit"
+            disabled={busy}
+            className="rounded bg-slate-700 px-4 py-2 font-semibold text-white disabled:opacity-50"
+          >
+            {busy ? "Creating..." : "Create category"}
+          </button>
+        </form>
+      </section>
+
+      <section className="mt-8 max-w-2xl rounded-lg border border-slate-700 bg-slate-900 p-4">
+        <h2 className="text-xl font-semibold text-white">Categories</h2>
+        {categories.length === 0 ? (
+          <p className="mt-2 text-slate-400">No categories yet.</p>
+        ) : (
+          <ul className="mt-2 space-y-2">
+            {categories.map((c) => (
+              <li key={c.id} className="rounded bg-slate-800 p-2 text-sm text-slate-200">
+                <span className="font-semibold">{c.name}</span>
+                {c.parent_id != null && <span className="text-slate-400"> (child)</span>}
+                {c.description && <span className="ml-2 text-slate-400">{c.description}</span>}
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <p className="mt-8">
+        <Link href="/" className="text-slate-400 underline">
+          ← Back to home
+        </Link>
+      </p>
+    </main>
+  );
+}
