@@ -21,6 +21,11 @@ export default function AdminPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [file, setFile] = useState<File | null>(null);
+  const [classification, setClassification] = useState<"GENERAL" | "CATEGORY">("CATEGORY");
+  const [categoryId, setCategoryId] = useState("");
+  const [docId, setDocId] = useState<number | null>(null);
+  const [docStatus, setDocStatus] = useState<string | null>(null);
 
   const loadCategories = async () => {
     try {
@@ -87,6 +92,57 @@ export default function AdminPage() {
     clearAccessToken();
     setToken(null);
     setCategories([]);
+  };
+
+  const handleUpload = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!token || !file) return;
+    setBusy(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const doc = await api.documents.upload(file, categoryId ? Number(categoryId) : null);
+      setDocId(doc.id);
+      setDocStatus(doc.status);
+      setNotice(`Document uploaded: ${doc.filename}`);
+      setFile(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Upload failed");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleClassify = async () => {
+    if (!token || docId == null) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const doc = await api.documents.classify(docId, classification, categoryId ? Number(categoryId) : null);
+      setDocId(doc.id);
+      setDocStatus(doc.status);
+      setNotice(`Document classified as ${doc.classification}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Classify failed");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleIngest = async () => {
+    if (!token || docId == null) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const doc = await api.documents.ingest(docId);
+      setDocId(doc.id);
+      setDocStatus(doc.status);
+      setNotice(`Document ingested: ${doc.filename}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Ingest failed");
+    } finally {
+      setBusy(false);
+    }
   };
 
   if (!token) {
@@ -213,6 +269,81 @@ export default function AdminPage() {
               </li>
             ))}
           </ul>
+        )}
+      </section>
+
+      <section className="mt-8 max-w-2xl rounded-lg border border-slate-700 bg-slate-900 p-4">
+        <h2 className="text-xl font-semibold text-white">Documents</h2>
+        <form onSubmit={handleUpload} className="mt-4 space-y-3">
+          <label className="block text-sm text-slate-300">
+            File
+            <input
+              type="file"
+              required
+              accept=".txt,.md,.pdf,.docx"
+              onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+              className="mt-1 w-full text-sm"
+            />
+          </label>
+          <label className="block text-sm text-slate-300">
+            Classification
+            <select
+              value={classification}
+              onChange={(e) => setClassification(e.target.value as "GENERAL" | "CATEGORY")}
+              className="mt-1 w-full rounded bg-slate-800 p-2 text-white"
+            >
+              <option value="GENERAL">GENERAL</option>
+              <option value="CATEGORY">CATEGORY</option>
+            </select>
+          </label>
+          {classification === "CATEGORY" && (
+            <label className="block text-sm text-slate-300">
+              Category
+              <select
+                value={categoryId}
+                onChange={(e) => setCategoryId(e.target.value)}
+                className="mt-1 w-full rounded bg-slate-800 p-2 text-white"
+              >
+                <option value="">— Select category —</option>
+                {categories.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          <button
+            type="submit"
+            disabled={busy || !file}
+            className="rounded bg-slate-700 px-4 py-2 font-semibold text-white disabled:opacity-50"
+          >
+            {busy ? "Working..." : "Upload document"}
+          </button>
+        </form>
+
+        {docId != null && (
+          <div className="mt-4 rounded bg-slate-800 p-3">
+            <p className="text-sm text-slate-200">
+              Last document: #{docId} — status: {docStatus}
+            </p>
+            <div className="mt-3 flex gap-2">
+              <button
+                onClick={handleClassify}
+                disabled={busy}
+                className="rounded bg-slate-700 px-3 py-1 text-sm text-white disabled:opacity-50"
+              >
+                Classify
+              </button>
+              <button
+                onClick={handleIngest}
+                disabled={busy}
+                className="rounded bg-slate-700 px-3 py-1 text-sm text-white disabled:opacity-50"
+              >
+                Ingest
+              </button>
+            </div>
+          </div>
         )}
       </section>
 
