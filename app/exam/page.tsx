@@ -14,6 +14,7 @@ import {
   type ExamPreferences,
   type ExamQuestion,
   type ExamSession,
+  type Category,
 } from "../../lib/api";
 
 export default function ExamPage() {
@@ -33,11 +34,26 @@ export default function ExamPage() {
   const [answers, setAnswers] = useState<Record<number, number>>({});
   const [submitResult, setSubmitResult] = useState<AnswerSubmitResponse | null>(null);
   const [answersDetail, setAnswersDetail] = useState<ExamAnswersResponse | null>(null);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [selectedCategoryId, setSelectedCategoryId] = useState("");
+
+  const loadUserContext = async () => {
+    try {
+      const me = await api.users.me();
+      const myCatId = me.user.current_category_id;
+      setSelectedCategoryId(myCatId != null ? String(myCatId) : "");
+      const cats = await api.categories.listForUser();
+      setCategories(cats.categories);
+    } catch {
+      // User context is best-effort; exam start will surface real errors.
+    }
+  };
 
   useEffect(() => {
     const existing = getAccessToken();
     if (existing) {
       setToken(existing);
+      void loadUserContext();
     }
   }, []);
 
@@ -52,6 +68,7 @@ export default function ExamPage() {
       setToken(res.access_token);
       setEmail("");
       setPassword("");
+      await loadUserContext();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed");
     } finally {
@@ -75,8 +92,13 @@ export default function ExamPage() {
     setError(null);
     setNotice(null);
     try {
+      const resolvedScopes = selectedCategoryId
+        ? [`CAT_${selectedCategoryId}`]
+        : scopes.trim()
+          ? scopes.split(",").map((s) => s.trim()).filter(Boolean)
+          : ["GENERAL"];
       const res = await api.exams.start({
-        scopes: scopes.trim() ? scopes.split(",").map((s) => s.trim()).filter(Boolean) : ["GENERAL"],
+        scopes: resolvedScopes,
         question_count: Math.max(1, Math.min(200, Number(questionCount) || 50)),
         time_limit_minutes: timeLimit ? Number(timeLimit) : null,
         reshuffle,
@@ -202,6 +224,29 @@ export default function ExamPage() {
                 onChange={(e) => setScopes(e.target.value)}
                 className="mt-1 w-full rounded bg-slate-800 p-2 text-white"
               />
+            </label>
+            <label className="block text-sm text-slate-300">
+              Category (your eligible scope)
+              <select
+                value={selectedCategoryId}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setSelectedCategoryId(v);
+                  if (v) {
+                    api.users.changeCategory(Number(v)).catch(() => {
+                      setError("Failed to update category");
+                    });
+                  }
+                }}
+                className="mt-1 w-full rounded bg-slate-800 p-2 text-white"
+              >
+                <option value="">— General only —</option>
+                {categories.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
             </label>
             <label className="block text-sm text-slate-300">
               Question count (1–200; default 50)

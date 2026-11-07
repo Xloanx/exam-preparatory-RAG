@@ -209,6 +209,8 @@ export const api = {
   categories: {
     list: (): Promise<{ categories: Category[] }> =>
       apiFetch<{ categories: Category[] }>("/admin/categories"),
+    listForUser: (): Promise<{ categories: Category[] }> =>
+      apiFetch<{ categories: Category[] }>("/categories"),
     create: (input: {
       name: string;
       parent_id?: number | null;
