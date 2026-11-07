@@ -19,8 +19,10 @@ import {
 
 export default function ExamPage() {
   const [token, setToken] = useState<string | null>(null);
+  const [mode, setMode] = useState<"login" | "register">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [fullName, setFullName] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -56,6 +58,30 @@ export default function ExamPage() {
       void loadUserContext();
     }
   }, []);
+
+  const handleRegister = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email.trim() || !password) {
+      setError("Email and password are required");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const res = await api.auth.register({ email, password, full_name: fullName.trim() || null });
+      setAccessToken(res.access_token);
+      setToken(res.access_token);
+      setEmail("");
+      setPassword("");
+      setFullName("");
+      await loadUserContext();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Registration failed");
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -154,9 +180,36 @@ export default function ExamPage() {
     return (
       <main className="min-h-screen bg-slate-950 p-8">
         <h1 className="text-3xl font-bold text-white">ITF Exam Prep RAG — Exam</h1>
-        <p className="mt-4 text-slate-400">Sign in to start an exam</p>
-        <form onSubmit={handleLogin} className="mt-6 max-w-md rounded-lg border border-slate-700 bg-slate-900 p-4">
-          <div className="space-y-3">
+        <p className="mt-4 text-slate-400">Sign in or create an account to start an exam</p>
+        <form onSubmit={mode === "login" ? handleLogin : handleRegister} className="mt-6 max-w-md rounded-lg border border-slate-700 bg-slate-900 p-4">
+          <div className="mb-4 flex gap-2">
+            <button
+              type="button"
+              onClick={() => setMode("login")}
+              className={`flex-1 rounded px-4 py-2 font-semibold ${mode === "login" ? "bg-slate-700 text-white" : "bg-slate-800 text-slate-300"}`}
+            >
+              Sign in
+            </button>
+            <button
+              type="button"
+              onClick={() => setMode("register")}
+              className={`flex-1 rounded px-4 py-2 font-semibold ${mode === "register" ? "bg-slate-700 text-white" : "bg-slate-800 text-slate-300"}`}
+            >
+              Create account
+            </button>
+          </div>
+          {mode === "register" && (
+            <label className="block text-sm text-slate-300">
+              Full name (optional)
+              <input
+                type="text"
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+                className="mt-1 w-full rounded bg-slate-800 p-2 text-white"
+              />
+            </label>
+          )}
+          <div className="mt-4 space-y-3">
             <label className="block text-sm text-slate-300">
               Email
               <input
@@ -184,7 +237,7 @@ export default function ExamPage() {
             disabled={busy}
             className="mt-4 rounded bg-slate-700 px-4 py-2 font-semibold text-white disabled:opacity-50"
           >
-            {busy ? "Signing in..." : "Sign in"}
+            {busy ? "Working..." : mode === "login" ? "Sign in" : "Create account"}
           </button>
         </form>
         <p className="mt-4">
